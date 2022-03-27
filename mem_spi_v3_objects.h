@@ -251,6 +251,17 @@ class MEM_CHIP{
       return( false );
     }
 
+    bool sendMemAdd( uint16_t add, uint8_t type ){
+      if( type == MemSpi_unkownAdd ){
+        Serial.println( "WRONG ADDRESS TYPE !" );
+        return( false );
+      }
+      else{
+        SPI.transfer16( add );
+        return( true );
+      }
+    }
+/*
     void formatVAR( uint16_t firstAdd, uint16_t q ){
       #ifdef MEM_debug
       Serial.print( "MEM_CHIP : format VAR " );
@@ -259,23 +270,12 @@ class MEM_CHIP{
       Serial.print( q );
       Serial.println( " octet(s)" );
       #endif
-      format( firstAdd, q );
+      format( firstAdd, q, MemSpi_dataAdd );
     }
-    void formatMFT(){
-      #ifdef MEM_debug
-      Serial.print( "MEM_CHIP : format MFT " );
-      Serial.print( mftSize );
-      Serial.println( " octet(s)" );
-      #endif
-      format( 0, mftSize );
-    }
-    void format(){
-      #ifdef MEM_debug
-      Serial.print( "MEM_CHIP : format ALL " );
-      Serial.print( maxAddress );
-      Serial.println( " octet(s)" );
-      #endif
-      format( 0, maxAddress );
+*/
+    void format( uint16_t firstAdd, uint16_t q, uint8_t type ){
+      uint32_t eraser[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+      send8( firstAdd, (uint8_t*)eraser, q, type, true );
     }
 
 // ============================================================================== //
@@ -284,23 +284,25 @@ class MEM_CHIP{
 //                                                                                // 
 // ============================================================================== //
 
-    void send8( uint16_t add, uint8_t b ){
+    void send8( uint16_t add, uint8_t b, uint8_t type ){
       romWriteProcess();
       _MEM_WRITE( chip.cs )
-      _MEM_ADD( add )
-      _MEM_SEND_B( b )
+      if( _MEM_ADD( add, type ) ){
+        _MEM_SEND_B( b )
+      }
       _MEM_RELEASE( chip.cs )
       #ifdef MEM_debug
       Serial.print( "MEM_CHIP -  send8 " );   Serial.print( add );  Serial.print( " : " );    printBIN( b, 8 );
       #endif
     }
 
-    uint8_t get8( uint16_t add ){
+    uint8_t get8( uint16_t add, uint8_t type ){
       uint8_t b = 0;
       romReadProcess();
       _MEM_READ( chip.cs )
-      _MEM_ADD( add )
-      _MEM_GET_B( b )
+      if( _MEM_ADD( add, type ) ){
+        _MEM_GET_B( b )
+      }
       _MEM_RELEASE( chip.cs )
       #ifdef MEM_debug
       Serial.print( "MEM_CHIP -   get8 " );   Serial.print( add );  Serial.print( " : " );    printBIN( b, 8 );
@@ -308,23 +310,25 @@ class MEM_CHIP{
       return( b );
     }
 
-    void send16( uint16_t add, uint16_t w ){
+    void send16( uint16_t add, uint16_t w, uint8_t type ){
       romWriteProcess();
       _MEM_WRITE( chip.cs )
-      _MEM_ADD( add )
-      _MEM_SEND_W( w )
+      if( _MEM_ADD( add, type ) ){
+        _MEM_SEND_W( w )
+      }
       _MEM_RELEASE( chip.cs )
       #ifdef MEM_debug
       Serial.print( "MEM_CHIP - send16 " );   Serial.print( add );  Serial.print( " : " );    printBIN( w, 16 );
       #endif
     }
 
-    uint16_t get16( uint16_t add ){
+    uint16_t get16( uint16_t add, uint8_t type ){
       uint16_t w = 0;
       romReadProcess();
       _MEM_READ( chip.cs )
-      _MEM_ADD( add )
-      _MEM_GET_W( w )
+      if( _MEM_ADD( add, type ) ){
+        _MEM_GET_W( w )
+      }
       _MEM_RELEASE( chip.cs )
       #ifdef MEM_debug
       Serial.print( "MEM_CHIP -  get16 " );   Serial.print( add );  Serial.print( " : " );    printBIN( w, 16 );
@@ -339,16 +343,23 @@ class MEM_CHIP{
 //                                                                                // 
 // ============================================================================== //
 
-    void send8( uint16_t firstAdd, uint8_t *data, uint16_t count, bool erase=false ){
+    void send8( uint16_t add, uint8_t *data, uint16_t count, uint8_t type, bool erase=false ){
       uint8_t tramSize = 0;
       while( count ){
-        tramSize = ( count > 32 ) ? 32 : count;
-        sendTrameHelper( firstAdd, data, tramSize );
-        firstAdd += tramSize;
-        count    -= tramSize;
-        data     += erase ? 0 : tramSize;
+        if( chip.memType == MemSpi_Rom ){
+          tramSize = 1;
+          send8( add, (*data), type );
+        }
+        else{
+          tramSize = ( count > 32 ) ? 32 : count;
+          sendTrameHelper( add, data, tramSize, type );
+        }
+        add   += tramSize;
+        count -= tramSize;
+        data  += erase ? 0 : tramSize;
       }
     }
+
 /*
     void send8( uint16_t firstAdd, uint8_t *data, uint16_t count, bool erase=false ){
       while( count-- ){
@@ -358,16 +369,17 @@ class MEM_CHIP{
       }
     }
 */
-    void get8( uint16_t firstAdd, uint8_t *data, uint16_t count, bool erase=false ){
+    void get8( uint16_t add, uint8_t *data, uint16_t count, uint8_t type ){
       uint8_t tramSize = 0;
-      while( count ){
+    while( count ){
         tramSize = ( count > 32 ) ? 32 : count;
-        getTrameHelper( firstAdd, data, tramSize );
-        firstAdd += tramSize;
-        count    -= tramSize;
-        data     += erase ? 0 : tramSize;
+        getTrameHelper( add, data, tramSize, type );
+        add   += tramSize;
+        count -= tramSize;
+        data  += tramSize;
       }
     }
+
 /*    
     void get8( uint16_t firstAdd, uint8_t *data, uint16_t count ){
       uint8_t tramSize = 0;
@@ -378,13 +390,8 @@ class MEM_CHIP{
       }
     }
 */
-    void send16( uint16_t firstAdd, uint16_t *data, uint16_t count ){
-      send8( firstAdd, (uint8_t*)data, count<<1 );
-    }
-
-    void get16( uint16_t firstAdd, uint16_t *data, uint16_t count ){
-      get8( firstAdd, (uint8_t*)data, count<<1 );
-    }
+    void send16( uint16_t firstAdd, uint16_t *data, uint16_t count, uint8_t type ){      send8( firstAdd, (uint8_t*)data, count<<1, type );    }
+    void get16( uint16_t firstAdd, uint16_t *data, uint16_t count, uint8_t type ){       get8(  firstAdd, (uint8_t*)data, count<<1, type );    }
 
 // ============================================================================== //
 //                                                                                // 
@@ -392,21 +399,22 @@ class MEM_CHIP{
 //                                                                                // 
 // ============================================================================== //
 
-    void extract( uint16_t add, uint16_t count ){
+    void extract( uint16_t add, uint16_t count, uint8_t t=MemSpi_unkownAdd ){
       romReadProcess();
       uint8_t b = 0;
       uint16_t index = 0;
       _MEM_READ( chip.cs )
-      _MEM_ADD( add )
-      while( count-- ){
-        _MEM_GET_B( b )
-        printDEC( index, 4, false );
-        Serial.print( " : " );
-        printBIN( b, 8, false );
-        Serial.print( " (" );
-        Serial.print( b );
-        Serial.println( ")" );
-        index++;
+      if( _MEM_ADD( add, t ) ){
+        while( count-- ){
+          _MEM_GET_B( b )
+          printDEC( index, 4, false );
+          Serial.print( " : " );
+          printBIN( b, 8, false );
+          Serial.print( " (" );
+          Serial.print( b );
+          Serial.println( ")" );
+          index++;
+        }
       }
       _MEM_RELEASE( chip.cs )
     }
@@ -415,47 +423,44 @@ class MEM_CHIP{
     volatile uint8_t *outputPortPTR;
              uint8_t  outputPortMask = 0;
 
-    void format( uint16_t firstAdd, uint16_t q ){
-      uint32_t eraser[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-      send8( firstAdd, (uint8_t*)eraser, q, true );
-    }
-
 // ============================================================================== //
 //                                                                                //
 // ROUTINES d'envoi et réception de TRAMES (32 octets max)                        //
 //                                                                                //
 // ============================================================================== //
     
-    void sendTrameHelper( uint16_t firstAdd, uint8_t *data, uint8_t count ){
+    void sendTrameHelper( uint16_t firstAdd, uint8_t *data, uint8_t count, uint8_t t=MemSpi_unkownAdd ){
       #ifdef MEM_debug
       Serial.print( "MEM_CHIP - sendTrameHelper " );   Serial.print( firstAdd );  Serial.print( " : " );    Serial.print( count );    Serial.println( " octet(s)" );    
       #endif
       romWriteProcess();
       _MEM_WRITE( chip.cs )
-      _MEM_ADD( firstAdd )
-      while( count-- ){
-        #ifdef MEM_debug
-        printBIN( (*data), 8 );
-        #endif
-        _MEM_SEND_B( *data )
-        data++;
+      if( _MEM_ADD( firstAdd, t ) ){
+        while( count-- ){
+          #ifdef MEM_debug
+          printBIN( *data, 8 );
+          #endif
+          _MEM_SEND_B( *data )
+          data++;
+        }
       }
       _MEM_RELEASE( chip.cs )
     }
 
-    void getTrameHelper( uint16_t firstAdd, uint8_t *data, uint8_t count ){
+    void getTrameHelper( uint16_t firstAdd, uint8_t *data, uint8_t count, uint8_t t=MemSpi_unkownAdd ){
       #ifdef MEM_debug
       Serial.print( "MEM_CHIP -  getTrameHelper " );   Serial.print( firstAdd );  Serial.print( " : " );    Serial.print( count );    Serial.println( " octet(s)" );    
       #endif
       romReadProcess();
       _MEM_READ( chip.cs )
-      _MEM_ADD( firstAdd )
-      while( count-- ){
-        _MEM_GET_B( *data )
-        #ifdef MEM_debug
-        printBIN( (*data), 8 );
-        #endif
-        data++;
+      if( _MEM_ADD( firstAdd, t ) ){
+        while( count-- ){
+          _MEM_GET_B( *data )
+          #ifdef MEM_debug
+          printBIN( (*data), 8 );
+          #endif
+          data++;
+        }
       }
       _MEM_RELEASE( chip.cs )
     }
@@ -493,7 +498,6 @@ class MEM_CHIP{
       #endif
       _ROM_WRITELATCH( chip.cs )
       _MEM_RELEASE( chip.cs )
-      delay(1);
     }
 
     void WIP_Waiting(){
@@ -501,12 +505,11 @@ class MEM_CHIP{
         #ifdef MEM_debug
         Serial.print( "MEM_CHIP : WIP_Waiting... " );
         #endif
-        uint8_t statusRegister = 0;
-        do{
+        uint8_t statusRegister = getStatusRegister();
+        while( statusRegister & RomSPI_WriteInProgress ){
+          delay(5);
           statusRegister = getStatusRegister();
-          statusRegister &= RomSPI_WriteInProgressMask;
-          delay(1);
-        } while( statusRegister & RomSPI_WriteInProgress );
+        }
         chip.wip = 0;
         #ifdef MEM_debug
         Serial.println( "ok" );
@@ -518,12 +521,11 @@ class MEM_CHIP{
       #ifdef MEM_debug
       Serial.print( "MEM_CHIP : WIP_WEL_Waiting... " );
       #endif
-      uint8_t statusRegister = 0;
-      do{
+      uint8_t statusRegister = getStatusRegister();
+      while( ((statusRegister ^ RomSPI_WriteLatchEnabled)>>1) & (statusRegister & RomSPI_WriteInProgress) ){
+        delay(5);
         statusRegister = getStatusRegister();
-        statusRegister &= RomSPI_WEL_WIP_Mask;
-        delay(1);
-      } while( ((statusRegister ^ RomSPI_WriteLatchEnabled)>>1) & (statusRegister & RomSPI_WriteInProgress) );
+      }
       chip.wip = 0;
       #ifdef MEM_debug
       Serial.println( "ok" );
@@ -537,16 +539,15 @@ class MEM_CHIP{
 // ============================================================================== //
 
     uint8_t getStatusRegister(){
-      #ifdef MEM_debug
-      Serial.print( "MEM_CHIP : getStatusRegister " );
-      #endif
       uint8_t statusRegister = 0;
       _ROM_STATUS_( chip.cs )
       _MEM_GET_B( statusRegister )
       _MEM_RELEASE( chip.cs )
       #ifdef MEM_debug
+      Serial.print( "status : " );
       printBIN( statusRegister, 8 );
       #endif
+      statusRegister &= RomSPI_WEL_WIP_Mask;
       return( statusRegister );
     }
 
@@ -607,7 +608,6 @@ class MEM_CHIP{
       }
       else{
         digitalWrite( chip.cs , HIGH );
-        delayMicroseconds(1);
       }
       SPI.endTransaction();
     }
