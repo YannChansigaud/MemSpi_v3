@@ -1,0 +1,40 @@
+#######################################
+# Syntax Coloring Map For RamMgr_v3
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+MEM_DEF	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+formatMFT	KEYWORD2
+format	KEYWORD2
+readRom	KEYWORD2
+focus	KEYWORD2
+setVal	KEYWORD2
+getVal	KEYWORD2
+newVar	KEYWORD2
+newRas	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+MemSpi_23LC512	LITERAL1
+MemSpi_25LC256	LITERAL1
+
+RamSPI_undefined	LITERAL1
+RamSPI_uint16_t	LITERAL1
+RamSPI_uint32_t	LITERAL1
+RamSPI_uint64_t	LITERAL1
+RamSPI_int16_t	LITERAL1
+RamSPI_int32_t	LITERAL1
+RamSPI_int64_t	LITERAL1
+RamSPI_float	LITERAL1
+RamSPI_double	LITERAL1
+RamSPI_userDefined	LITERAL1
